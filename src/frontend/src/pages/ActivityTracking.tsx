@@ -8,426 +8,463 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Activity, Clock, Eye, Shield, User } from "lucide-react";
+import {
+  Activity,
+  AlertTriangle,
+  Download,
+  FileText,
+  HardDrive,
+  Key,
+  Lock,
+  LogIn,
+  Shield,
+  Upload,
+  User,
+} from "lucide-react";
 import { motion } from "motion/react";
-import { useEffect, useMemo, useRef, useState } from "react";
-import * as THREE from "three";
-import type { SecurityEvent } from "../backend";
-import { Button3D } from "../components/Button3D";
-import { useEvents } from "../hooks/useQueries";
+import { useMemo, useState } from "react";
+import { toast } from "sonner";
 
-const HOURS = Array.from({ length: 24 }, (_, h) => h);
-const DAY_LABELS = Array.from({ length: 7 }, (_, i) => {
-  const d = new Date();
-  d.setDate(d.getDate() - (6 - i));
-  return d.toLocaleDateString(undefined, { weekday: "short" });
-});
-
-function riskColor(level: string): string {
-  if (level === "critical") return "#ef4444";
-  if (level === "suspicious") return "#f59e0b";
-  return "#22c55e";
+interface ActivityEvent {
+  id: string;
+  action: string;
+  user: string;
+  timestamp: string;
+  details: string;
+  type: "login" | "file" | "encrypt" | "backup" | "access" | "alert" | "system";
+  severity: "normal" | "warning" | "critical";
 }
 
-function ActivityBarChart({ events }: { events: SecurityEvent[] }) {
-  const mountRef = useRef<HTMLDivElement>(null);
+const SEED_ACTIVITIES: ActivityEvent[] = [
+  {
+    id: "a1",
+    action: "User Login",
+    user: "ku",
+    timestamp: "2026-03-26 09:14:22",
+    details: "Successful authentication from 192.168.1.100",
+    type: "login",
+    severity: "normal",
+  },
+  {
+    id: "a2",
+    action: "File Encrypted",
+    user: "ku",
+    timestamp: "2026-03-26 09:15:01",
+    details: "OP_NIGHTFALL_BRIEF.pdf encrypted with AES-256",
+    type: "encrypt",
+    severity: "normal",
+  },
+  {
+    id: "a3",
+    action: "Unauthorized Access",
+    user: "unknown",
+    timestamp: "2026-03-26 09:16:45",
+    details: "Failed login attempt from 10.0.0.255 — IP blocked",
+    type: "alert",
+    severity: "critical",
+  },
+  {
+    id: "a4",
+    action: "Backup Created",
+    user: "ku",
+    timestamp: "2026-03-26 09:18:33",
+    details: "Full system backup to MIL-BACKUP-01",
+    type: "backup",
+    severity: "normal",
+  },
+  {
+    id: "a5",
+    action: "User Login",
+    user: "alex.morgan",
+    timestamp: "2026-03-26 08:45:12",
+    details: "Successful authentication from 10.0.1.55",
+    type: "login",
+    severity: "normal",
+  },
+  {
+    id: "a6",
+    action: "File Uploaded",
+    user: "alex.morgan",
+    timestamp: "2026-03-26 08:46:30",
+    details: "RECON_PHOTOS.zip uploaded to secure vault",
+    type: "file",
+    severity: "normal",
+  },
+  {
+    id: "a7",
+    action: "Access Granted",
+    user: "ku",
+    timestamp: "2026-03-26 08:50:00",
+    details: "Read/Write access granted to s.chen",
+    type: "access",
+    severity: "normal",
+  },
+  {
+    id: "a8",
+    action: "Suspicious Login",
+    user: "j.torres",
+    timestamp: "2026-03-26 03:15:44",
+    details: "Login from unusual location — 220.180.45.201",
+    type: "alert",
+    severity: "critical",
+  },
+  {
+    id: "a9",
+    action: "File Sharded",
+    user: "s.chen",
+    timestamp: "2026-03-25 22:10:55",
+    details: "AGENT_PROFILES.enc split into 12 shards",
+    type: "encrypt",
+    severity: "normal",
+  },
+  {
+    id: "a10",
+    action: "Risk Score Alert",
+    user: "system",
+    timestamp: "2026-03-25 22:05:00",
+    details: "Risk score elevated to 75 — High threat detected",
+    type: "system",
+    severity: "warning",
+  },
+  {
+    id: "a11",
+    action: "User Blocked",
+    user: "ku",
+    timestamp: "2026-03-25 21:00:10",
+    details: "j.torres blocked due to suspicious activity",
+    type: "access",
+    severity: "warning",
+  },
+  {
+    id: "a12",
+    action: "Backup Restored",
+    user: "ku",
+    timestamp: "2026-03-25 20:30:22",
+    details: "Restored backup BACKUP_2026-03-24 to production",
+    type: "backup",
+    severity: "normal",
+  },
+  {
+    id: "a13",
+    action: "File Deleted Local",
+    user: "m.webb",
+    timestamp: "2026-03-25 18:45:00",
+    details: "Local copy of COMMS_LOG.txt deleted after backup",
+    type: "file",
+    severity: "normal",
+  },
+  {
+    id: "a14",
+    action: "System Scan",
+    user: "system",
+    timestamp: "2026-03-25 17:00:00",
+    details: "Scheduled security scan completed — 0 threats found",
+    type: "system",
+    severity: "normal",
+  },
+  {
+    id: "a15",
+    action: "User Login",
+    user: "s.chen",
+    timestamp: "2026-03-25 16:20:15",
+    details: "Successful authentication from 10.0.1.88",
+    type: "login",
+    severity: "normal",
+  },
+  {
+    id: "a16",
+    action: "File Encrypted",
+    user: "s.chen",
+    timestamp: "2026-03-25 16:22:00",
+    details: "SATELLITE_COORDS.enc encrypted with AES-256",
+    type: "encrypt",
+    severity: "normal",
+  },
+  {
+    id: "a17",
+    action: "Access Revoked",
+    user: "ku",
+    timestamp: "2026-03-25 15:00:00",
+    details: "Encryption permissions revoked from m.webb",
+    type: "access",
+    severity: "warning",
+  },
+  {
+    id: "a18",
+    action: "Unauthorized Access",
+    user: "unknown",
+    timestamp: "2026-03-25 14:30:11",
+    details: "Brute-force attempt detected from 185.220.101.5 — blocked",
+    type: "alert",
+    severity: "critical",
+  },
+  {
+    id: "a19",
+    action: "Data Export",
+    user: "alex.morgan",
+    timestamp: "2026-03-25 13:10:00",
+    details: "Logs exported as CSV by alex.morgan",
+    type: "file",
+    severity: "normal",
+  },
+  {
+    id: "a20",
+    action: "Risk Engine Started",
+    user: "system",
+    timestamp: "2026-03-25 09:00:00",
+    details: "SENTINEL risk engine initialized — base score 30",
+    type: "system",
+    severity: "normal",
+  },
+];
 
-  useEffect(() => {
-    const mount = mountRef.current;
-    if (!mount) return;
+const TYPE_ICONS: Record<string, React.ReactNode> = {
+  login: <LogIn size={14} style={{ color: "#00d4ff" }} />,
+  file: <Upload size={14} style={{ color: "#00ff88" }} />,
+  encrypt: <Lock size={14} style={{ color: "#7c3aed" }} />,
+  backup: <HardDrive size={14} style={{ color: "#ffaa00" }} />,
+  access: <Key size={14} style={{ color: "#00d4ff" }} />,
+  alert: <AlertTriangle size={14} style={{ color: "#ff0040" }} />,
+  system: <Shield size={14} style={{ color: "rgba(224,224,255,0.5)" }} />,
+};
 
-    const W = mount.clientWidth || 400;
-    const H = 200;
+const SEVERITY_COLORS: Record<string, string> = {
+  normal: "rgba(0,212,255,0.15)",
+  warning: "rgba(255,170,0,0.15)",
+  critical: "rgba(255,0,64,0.15)",
+};
 
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(45, W / H, 0.1, 100);
-    camera.position.set(0, 4, 12);
-    camera.lookAt(0, 0, 0);
-
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setSize(W, H);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setClearColor(0x000000, 0);
-    mount.appendChild(renderer.domElement);
-
-    const now = Date.now();
-    const dayMs = 86400000;
-    const days: { safe: number; suspicious: number; critical: number }[] =
-      Array.from({ length: 7 }, () => ({
-        safe: 0,
-        suspicious: 0,
-        critical: 0,
-      }));
-
-    for (const ev of events) {
-      const ts = Number(ev.timestamp) / 1_000_000;
-      const diffDays = Math.floor((now - ts) / dayMs);
-      if (diffDays >= 0 && diffDays < 7) {
-        const idx = 6 - diffDays;
-        if (ev.riskLevel === "critical") days[idx].critical++;
-        else if (ev.riskLevel === "suspicious") days[idx].suspicious++;
-        else days[idx].safe++;
-      }
-    }
-
-    const barGroup = new THREE.Group();
-    const spacing = 2;
-    for (let i = 0; i < 7; i++) {
-      const d = days[i];
-      const total = d.safe + d.suspicious + d.critical || 1;
-      const maxH = 3;
-      const x = (i - 3) * spacing;
-
-      const segments = [
-        { count: d.safe, color: 0x22c55e },
-        { count: d.suspicious, color: 0xf59e0b },
-        { count: d.critical, color: 0xef4444 },
-      ];
-
-      let yOffset = 0;
-      for (const seg of segments) {
-        if (seg.count === 0) continue;
-        const h = (seg.count / total) * maxH;
-        const geo = new THREE.BoxGeometry(1.2, h, 0.6);
-        const mat = new THREE.MeshPhongMaterial({
-          color: seg.color,
-          emissive: seg.color,
-          emissiveIntensity: 0.15,
-          transparent: true,
-          opacity: 0.85,
-        });
-        const bar = new THREE.Mesh(geo, mat);
-        bar.position.set(x, yOffset + h / 2, 0);
-        barGroup.add(bar);
-        yOffset += h;
-      }
-    }
-    scene.add(barGroup);
-
-    const light = new THREE.DirectionalLight(0xffffff, 1);
-    light.position.set(3, 5, 5);
-    scene.add(light);
-    scene.add(new THREE.AmbientLight(0x334466, 0.8));
-
-    let animId: number;
-    let t = 0;
-    const animate = () => {
-      animId = requestAnimationFrame(animate);
-      t += 0.005;
-      barGroup.rotation.y = Math.sin(t * 0.3) * 0.15;
-      renderer.render(scene, camera);
-    };
-    animate();
-
-    return () => {
-      cancelAnimationFrame(animId);
-      renderer.dispose();
-      if (mount.contains(renderer.domElement))
-        mount.removeChild(renderer.domElement);
-    };
-  }, [events]);
-
-  return <div ref={mountRef} style={{ width: "100%", height: 200 }} />;
-}
+const SEVERITY_BADGE: Record<string, string> = {
+  normal: "bg-cyan-500/10 text-cyan-400 border-cyan-500/20",
+  warning: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+  critical: "bg-red-500/10 text-red-400 border-red-500/20",
+};
 
 export function ActivityTracking() {
-  const { data: events = [] } = useEvents();
-  const [userFilter, setUserFilter] = useState("all");
-  const [timelineKey, setTimelineKey] = useState(0);
+  const [filter, setFilter] = useState<string>("all");
+  const [userFilter, setUserFilter] = useState<string>("all");
 
   const users = useMemo(() => {
-    const s = new Set<string>();
-    for (const e of events) s.add(e.userName);
-    return Array.from(s);
-  }, [events]);
+    const names = Array.from(new Set(SEED_ACTIVITIES.map((a) => a.user)));
+    return ["all", ...names];
+  }, []);
 
-  const userStats = useMemo(() => {
-    const map = new Map<
-      string,
-      { safe: number; suspicious: number; critical: number; lastSeen: bigint }
-    >();
-    for (const ev of events) {
-      const cur = map.get(ev.userName) ?? {
-        safe: 0,
-        suspicious: 0,
-        critical: 0,
-        lastSeen: BigInt(0),
-      };
-      if (ev.riskLevel === "critical") cur.critical++;
-      else if (ev.riskLevel === "suspicious") cur.suspicious++;
-      else cur.safe++;
-      if (ev.timestamp > cur.lastSeen) cur.lastSeen = ev.timestamp;
-      map.set(ev.userName, cur);
-    }
-    return map;
-  }, [events]);
-
-  const filteredEvents = useMemo(() => {
-    const list =
-      userFilter === "all"
-        ? events
-        : events.filter((e) => e.userName === userFilter);
-    return [...list]
-      .sort((a, b) => Number(b.timestamp) - Number(a.timestamp))
-      .slice(0, 40);
-  }, [events, userFilter]);
-
-  const hourActivity = useMemo(() => {
-    const counts = new Array(24).fill(0);
-    for (const ev of events) {
-      const ts = Number(ev.timestamp) / 1_000_000;
-      const h = new Date(ts).getHours();
-      counts[h]++;
-    }
-    return counts;
-  }, [events]);
-
-  const maxHour = Math.max(...hourActivity, 1);
-
-  const refreshTimeline = () => {
-    setTimelineKey((k) => k + 1);
-  };
+  const filtered = useMemo(() => {
+    return SEED_ACTIVITIES.filter((a) => {
+      const matchType = filter === "all" || a.type === filter;
+      const matchUser = userFilter === "all" || a.user === userFilter;
+      return matchType && matchUser;
+    });
+  }, [filter, userFilter]);
 
   return (
-    <div className="flex-1 overflow-auto p-6 space-y-6">
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-[11px] text-muted-foreground tracking-widest uppercase">
-            SecureGuard – Activity
-          </p>
-          <h1 className="text-2xl font-bold text-foreground mt-0.5">
-            Activity Tracking
-          </h1>
-        </div>
-        <Button3D>
-          <Button
-            size="sm"
-            onClick={refreshTimeline}
-            className="h-8 text-xs bg-primary/20 text-primary border border-primary/30 hover:bg-primary/30"
-            variant="ghost"
+    <div style={{ padding: "24px", maxWidth: 1100, margin: "0 auto" }}>
+      {/* Header */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          marginBottom: 24,
+        }}
+      >
+        <Activity size={20} style={{ color: "#00d4ff" }} />
+        <h1
+          style={{
+            fontFamily: "JetBrains Mono, monospace",
+            fontSize: "1.1rem",
+            fontWeight: 900,
+            letterSpacing: "0.25em",
+            color: "#00d4ff",
+            margin: 0,
+            textShadow: "0 0 15px rgba(0,212,255,0.5)",
+          }}
+        >
+          ACTIVITY TRACKING
+        </h1>
+        <Badge
+          variant="outline"
+          className="text-xs font-mono border-cyan-500/20 text-cyan-400"
+        >
+          {SEED_ACTIVITIES.length} EVENTS
+        </Badge>
+        <div style={{ flex: 1 }} />
+        <Button
+          data-ocid="activity.secondary_button"
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            toast.success("Activity log exported");
+          }}
+          className="text-xs font-mono border-cyan-500/20 text-cyan-400 hover:bg-cyan-500/10"
+        >
+          <Download size={12} className="mr-1" />
+          EXPORT
+        </Button>
+      </div>
+
+      {/* Filters */}
+      <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
+        <Select value={filter} onValueChange={setFilter}>
+          <SelectTrigger
+            data-ocid="activity.select"
+            className="w-40 text-xs font-mono border-cyan-500/20 bg-white/5 text-white/70"
           >
-            <Activity className="w-3.5 h-3.5 mr-1.5" /> Refresh Timeline
-          </Button>
-        </Button3D>
-      </div>
+            <SelectValue placeholder="Filter by type" />
+          </SelectTrigger>
+          <SelectContent className="font-mono text-xs">
+            <SelectItem value="all">ALL TYPES</SelectItem>
+            <SelectItem value="login">LOGIN</SelectItem>
+            <SelectItem value="file">FILE</SelectItem>
+            <SelectItem value="encrypt">ENCRYPT</SelectItem>
+            <SelectItem value="backup">BACKUP</SelectItem>
+            <SelectItem value="access">ACCESS</SelectItem>
+            <SelectItem value="alert">ALERT</SelectItem>
+            <SelectItem value="system">SYSTEM</SelectItem>
+          </SelectContent>
+        </Select>
 
-      {/* User Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-        {Array.from(userStats.entries())
-          .slice(0, 8)
-          .map(([user, stats], i) => (
-            <motion.div
-              key={user}
-              initial={{ opacity: 0, y: 24, rotateX: -18, z: -30 }}
-              animate={{ opacity: 1, y: 0, rotateX: 0, z: 0 }}
-              transition={{
-                delay: i * 0.07,
-                type: "spring",
-                stiffness: 200,
-                damping: 20,
-              }}
-              whileHover={{
-                scale: 1.04,
-                rotateY: 3,
-                boxShadow: "0 8px 32px oklch(0.55 0.25 250 / 0.2)",
-              }}
-              style={{
-                transformStyle: "preserve-3d",
-                perspective: 600,
-                cursor: "default",
-              }}
-            >
-              <Card className="bg-card border-border">
-                <CardContent className="p-3">
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center">
-                      <User className="w-3 h-3 text-primary" />
-                    </div>
-                    <p className="text-xs font-semibold text-foreground truncate">
-                      {user}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] text-success">
-                      ✓ {stats.safe}
-                    </span>
-                    <span className="text-[10px] text-warning">
-                      ⚠ {stats.suspicious}
-                    </span>
-                    <span className="text-[10px] text-destructive">
-                      ⛔ {stats.critical}
-                    </span>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          ))}
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* 3D Bar Chart */}
-        <Card className="bg-card border-border">
-          <CardHeader className="pb-2 pt-4 px-4">
-            <CardTitle className="text-[13px] font-semibold text-foreground">
-              7-Day Activity
-            </CardTitle>
-            <div className="flex gap-3 text-[11px] mt-1">
-              {DAY_LABELS.map((d) => (
-                <span key={d} className="text-muted-foreground">
-                  {d}
-                </span>
-              ))}
-            </div>
-          </CardHeader>
-          <CardContent className="px-3 pb-3">
-            <ActivityBarChart events={events} />
-          </CardContent>
-        </Card>
-
-        {/* Hour Heatmap */}
-        <Card className="bg-card border-border">
-          <CardHeader className="pb-2 pt-4 px-4">
-            <CardTitle className="text-[13px] font-semibold text-foreground">
-              Activity by Hour
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pb-4">
-            <div className="flex flex-wrap gap-1">
-              {HOURS.map((h) => {
-                const count = hourActivity[h];
-                const intensity = count / maxHour;
-                return (
-                  <motion.div
-                    key={h}
-                    initial={{ opacity: 0, scale: 0 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: h * 0.02 }}
-                    title={`${h}:00 — ${count} events`}
-                    className="rounded-sm cursor-default"
-                    style={{
-                      width: 28,
-                      height: 28,
-                      background: `oklch(${0.35 + intensity * 0.35} ${0.1 + intensity * 0.2} 250)`,
-                      border: "1px solid oklch(0.3 0.05 250 / 0.4)",
-                    }}
-                  />
-                );
-              })}
-            </div>
-            <div className="flex justify-between mt-2 text-[10px] text-muted-foreground">
-              <span>00:00</span>
-              <span>12:00</span>
-              <span>23:00</span>
-            </div>
-          </CardContent>
-        </Card>
+        <Select value={userFilter} onValueChange={setUserFilter}>
+          <SelectTrigger
+            data-ocid="activity.select"
+            className="w-40 text-xs font-mono border-cyan-500/20 bg-white/5 text-white/70"
+          >
+            <SelectValue placeholder="Filter by user" />
+          </SelectTrigger>
+          <SelectContent className="font-mono text-xs">
+            {users.map((u) => (
+              <SelectItem key={u} value={u}>
+                {u === "all" ? "ALL USERS" : u.toUpperCase()}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Timeline */}
-      <Card className="bg-card border-border">
-        <CardHeader className="pb-3 pt-4 px-4">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-[13px] font-semibold text-foreground">
-              Event Timeline
-            </CardTitle>
-            <Select value={userFilter} onValueChange={setUserFilter}>
-              <SelectTrigger className="w-40 h-7 text-xs bg-secondary border-border">
-                <SelectValue placeholder="All users" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Users</SelectItem>
-                {users.map((u) => (
-                  <SelectItem key={u} value={u}>
-                    {u}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </CardHeader>
-        <CardContent className="px-4 pb-4">
-          <div
-            className="relative pl-6 border-l border-border/50 space-y-1"
-            key={timelineKey}
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {filtered.map((event, i) => (
+          <motion.div
+            key={event.id}
+            data-ocid={`activity.item.${i + 1}`}
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: i * 0.03, duration: 0.25 }}
+            whileHover={{ x: 4, transition: { duration: 0.1 } }}
           >
-            {filteredEvents.length === 0 ? (
-              <p className="text-xs text-muted-foreground py-6 text-center">
-                No events found
-              </p>
-            ) : (
-              filteredEvents.map((ev, i) => (
-                <motion.div
-                  key={String(ev.id)}
-                  initial={{ opacity: 0, y: 20, rotateX: -14, z: -20 }}
-                  animate={{ opacity: 1, y: 0, rotateX: 0, z: 0 }}
-                  transition={{
-                    delay: i * 0.05,
-                    type: "spring",
-                    stiffness: 220,
-                    damping: 22,
+            <Card
+              className="border-white/5 transition-all duration-200"
+              style={{
+                background: SEVERITY_COLORS[event.severity],
+                borderColor:
+                  event.severity === "critical"
+                    ? "rgba(255,0,64,0.25)"
+                    : event.severity === "warning"
+                      ? "rgba(255,170,0,0.2)"
+                      : "rgba(0,212,255,0.1)",
+              }}
+            >
+              <CardContent className="p-3 flex items-start gap-3">
+                <div
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 8,
+                    background: "rgba(0,0,0,0.3)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
                   }}
-                  whileHover={{
-                    x: 4,
-                    boxShadow: "0 4px 16px oklch(0.55 0.25 250 / 0.12)",
-                  }}
-                  style={{ transformStyle: "preserve-3d", perspective: 500 }}
-                  className="relative flex items-start gap-3 py-2 px-3 rounded-lg hover:bg-accent/30 transition-colors"
                 >
+                  {TYPE_ICONS[event.type]}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
                   <div
-                    className="absolute -left-7 top-3 w-2 h-2 rounded-full border border-background"
-                    style={{ background: riskColor(ev.riskLevel ?? "") }}
-                  />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-[11px] font-semibold text-foreground">
-                        {ev.userName}
-                      </span>
-                      <span className="text-[10px] font-mono text-muted-foreground">
-                        {ev.action}
-                      </span>
-                      <Badge
-                        className={`text-[9px] px-1 border ${
-                          ev.riskLevel === "critical"
-                            ? "bg-destructive/15 text-destructive border-destructive/25"
-                            : ev.riskLevel === "suspicious"
-                              ? "bg-warning/15 text-warning border-warning/25"
-                              : "bg-success/15 text-success border-success/25"
-                        }`}
-                      >
-                        {ev.riskLevel?.toUpperCase()}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center gap-3 mt-0.5">
-                      <span className="text-[10px] text-muted-foreground flex items-center gap-1">
-                        <Clock className="w-2.5 h-2.5" />
-                        {new Date(
-                          Number(ev.timestamp) / 1_000_000,
-                        ).toLocaleString()}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground flex items-center gap-1">
-                        <Eye className="w-2.5 h-2.5" />
-                        {ev.ipAddress}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1 flex-shrink-0">
-                    <Shield
-                      className="w-3 h-3"
-                      style={{ color: riskColor(ev.riskLevel ?? "") }}
-                    />
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      flexWrap: "wrap",
+                    }}
+                  >
                     <span
-                      className="text-[10px] font-bold"
-                      style={{ color: riskColor(ev.riskLevel ?? "") }}
+                      style={{
+                        fontFamily: "JetBrains Mono, monospace",
+                        fontSize: "0.75rem",
+                        fontWeight: 700,
+                        color: "rgba(224,224,255,0.9)",
+                      }}
                     >
-                      {String(ev.riskScore)}
+                      {event.action}
+                    </span>
+                    <Badge
+                      variant="outline"
+                      className={`text-xs font-mono ${SEVERITY_BADGE[event.severity]}`}
+                    >
+                      {event.severity.toUpperCase()}
+                    </Badge>
+                    <span
+                      style={{
+                        fontFamily: "JetBrains Mono, monospace",
+                        fontSize: "0.6rem",
+                        color: "rgba(0,212,255,0.6)",
+                        background: "rgba(0,212,255,0.06)",
+                        border: "1px solid rgba(0,212,255,0.15)",
+                        borderRadius: 4,
+                        padding: "1px 6px",
+                      }}
+                    >
+                      <User
+                        size={8}
+                        style={{ display: "inline", marginRight: 3 }}
+                      />
+                      {event.user}
+                    </span>
+                    <span
+                      style={{
+                        marginLeft: "auto",
+                        fontFamily: "JetBrains Mono, monospace",
+                        fontSize: "0.58rem",
+                        color: "rgba(224,224,255,0.3)",
+                        flexShrink: 0,
+                      }}
+                    >
+                      {event.timestamp}
                     </span>
                   </div>
-                </motion.div>
-              ))
-            )}
+                  <p
+                    style={{
+                      fontFamily: "JetBrains Mono, monospace",
+                      fontSize: "0.65rem",
+                      color: "rgba(224,224,255,0.5)",
+                      margin: "4px 0 0",
+                    }}
+                  >
+                    {event.details}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        ))}
+
+        {filtered.length === 0 && (
+          <div
+            data-ocid="activity.empty_state"
+            style={{
+              textAlign: "center",
+              padding: "3rem",
+              color: "rgba(224,224,255,0.2)",
+              fontFamily: "JetBrains Mono, monospace",
+              fontSize: "0.7rem",
+              letterSpacing: "0.1em",
+            }}
+          >
+            NO EVENTS MATCH FILTER
           </div>
-        </CardContent>
-      </Card>
+        )}
+      </div>
     </div>
   );
 }

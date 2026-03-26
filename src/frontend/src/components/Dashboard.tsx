@@ -1,7 +1,6 @@
 import {
   Cpu,
   Eye,
-  LogOut,
   MonitorDot,
   Radio,
   Shield,
@@ -11,24 +10,273 @@ import {
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
+import { AppStateProvider, useAppState } from "../context/AppStateContext";
 import { useAuth } from "../contexts/AuthContext";
 import { useRisk } from "../contexts/RiskContext";
+import { useNotifications } from "../hooks/useNotifications";
 import { useRiskScore } from "../hooks/useRiskScore";
+import { AccessControl } from "../pages/AccessControl";
+import { ActivityTracking } from "../pages/ActivityTracking";
+import { Admin } from "../pages/Admin";
+import { Alerts } from "../pages/Alerts";
+import { Backups } from "../pages/Backups";
+import { Files } from "../pages/Files";
+import { Logs } from "../pages/Logs";
+import { NotificationsPage } from "../pages/Notifications";
 import { getRiskColor } from "../utils/riskCalculator";
 import { ActivityLog } from "./ActivityLog";
 import { NotificationBell } from "./NotificationBell";
 import { RiskGauge } from "./RiskGauge";
 import { SelfDestructButton } from "./SelfDestructButton";
+import { Sidebar } from "./Sidebar";
 
 type PurgeStage = "idle" | "countdown" | "purged";
 
-export function Dashboard() {
+function DashboardPage() {
+  const { riskScore, riskLevel, threatsBlocked } = useRiskScore();
+  const riskColor = getRiskColor(riskScore);
+
+  return (
+    <main
+      style={{
+        flex: 1,
+        display: "grid",
+        gridTemplateColumns: "1fr 1fr",
+        gap: 20,
+        padding: "20px 24px",
+        overflow: "auto",
+        maxWidth: 1200,
+        width: "100%",
+        boxSizing: "border-box",
+      }}
+    >
+      {/* Left column */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        {/* Risk Gauge card */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+          style={{
+            background: "rgba(5,5,30,0.7)",
+            border: `1px solid ${riskColor}30`,
+            borderRadius: 12,
+            padding: "1.5rem",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            boxShadow: `0 0 30px ${riskColor}08`,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              marginBottom: 16,
+              alignSelf: "flex-start",
+              width: "100%",
+            }}
+          >
+            <Radio size={14} style={{ color: riskColor }} />
+            <span
+              style={{
+                fontFamily: "JetBrains Mono, monospace",
+                fontSize: "0.65rem",
+                letterSpacing: "0.2em",
+                color: "rgba(224,224,255,0.5)",
+              }}
+            >
+              REAL-TIME RISK ASSESSMENT
+            </span>
+            <span
+              style={{
+                marginLeft: "auto",
+                fontFamily: "JetBrains Mono, monospace",
+                fontSize: "0.55rem",
+                color: "rgba(0,255,136,0.6)",
+                background: "rgba(0,255,136,0.06)",
+                border: "1px solid rgba(0,255,136,0.15)",
+                borderRadius: 100,
+                padding: "2px 8px",
+              }}
+            >
+              LIVE
+            </span>
+          </div>
+          <RiskGauge score={riskScore} />
+        </motion.div>
+
+        {/* Security metrics */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.1 }}
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(3, 1fr)",
+            gap: 10,
+          }}
+        >
+          {[
+            {
+              icon: <Users size={16} style={{ color: "#00d4ff" }} />,
+              label: "ACTIVE SESSIONS",
+              value: "1",
+              color: "#00d4ff",
+            },
+            {
+              icon: <ShieldCheck size={16} style={{ color: "#00ff88" }} />,
+              label: "THREATS BLOCKED",
+              value: String(threatsBlocked),
+              color: "#00ff88",
+            },
+            {
+              icon: <Shield size={16} style={{ color: "#ffaa00" }} />,
+              label: "LAST SCAN",
+              value: "LIVE",
+              color: "#ffaa00",
+            },
+          ].map((card) => (
+            <div
+              key={card.label}
+              style={{
+                background: "rgba(5,5,30,0.7)",
+                border: `1px solid ${card.color}20`,
+                borderRadius: 8,
+                padding: "12px",
+                display: "flex",
+                flexDirection: "column",
+                gap: 8,
+              }}
+            >
+              {card.icon}
+              <p
+                style={{
+                  fontFamily: "JetBrains Mono, monospace",
+                  fontSize: "1.4rem",
+                  fontWeight: 900,
+                  color: card.color,
+                  margin: 0,
+                  textShadow: `0 0 10px ${card.color}50`,
+                }}
+              >
+                {card.value}
+              </p>
+              <p
+                style={{
+                  fontFamily: "JetBrains Mono, monospace",
+                  fontSize: "0.55rem",
+                  color: "rgba(224,224,255,0.35)",
+                  margin: 0,
+                  letterSpacing: "0.1em",
+                }}
+              >
+                {card.label}
+              </p>
+            </div>
+          ))}
+        </motion.div>
+      </div>
+
+      {/* Right column */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        {/* Activity log */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.15 }}
+          style={{ flex: 1, minHeight: 0, maxHeight: 360 }}
+        >
+          <ActivityLog />
+        </motion.div>
+
+        {/* Risk level info */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.2 }}
+          style={{
+            background: "rgba(5,5,30,0.7)",
+            border: `1px solid ${riskColor}20`,
+            borderRadius: 8,
+            padding: "12px 16px",
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+          }}
+        >
+          <div
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: "50%",
+              background: riskColor,
+              boxShadow: `0 0 10px ${riskColor}`,
+              animation: "pulse 2s infinite",
+              flexShrink: 0,
+            }}
+          />
+          <div style={{ flex: 1 }}>
+            <p
+              style={{
+                fontFamily: "JetBrains Mono, monospace",
+                fontSize: "0.65rem",
+                color: riskColor,
+                margin: 0,
+                letterSpacing: "0.15em",
+              }}
+            >
+              CURRENT THREAT LEVEL: {riskLevel.toUpperCase()}
+            </p>
+            <p
+              style={{
+                fontFamily: "JetBrains Mono, monospace",
+                fontSize: "0.58rem",
+                color: "rgba(224,224,255,0.35)",
+                margin: "3px 0 0",
+              }}
+            >
+              Risk engine auto-increments every 15s — user interaction reduces
+              score
+            </p>
+          </div>
+        </motion.div>
+
+        {/* Self-destruct */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.25 }}
+          style={{
+            background: "rgba(5,5,30,0.7)",
+            border: "1px solid rgba(255,0,64,0.15)",
+            borderRadius: 8,
+            padding: "16px",
+          }}
+        >
+          <SelfDestructButton />
+        </motion.div>
+      </div>
+    </main>
+  );
+}
+
+function AppShellInner() {
   const { logout } = useAuth();
   const { selfDestructTriggered, resetSelfDestruct, decreaseRisk } = useRisk();
-  const { riskScore, riskLevel, threatsBlocked } = useRiskScore();
+  const { riskScore } = useRiskScore();
+  const { unreadCount } = useNotifications();
+  const { currentPage, setCurrentPage, alerts } = useAppState();
   const [purgeStage, setPurgeStage] = useState<PurgeStage>("idle");
   const [countdown, setCountdown] = useState(10);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const riskColor = getRiskColor(riskScore);
+  const isHighRisk = riskScore > 70;
+  const activeAlertsCount = (alerts as Array<Record<string, unknown>>).filter(
+    (a) => !a.acknowledged,
+  ).length;
 
   // Handle self-destruct trigger
   useEffect(() => {
@@ -83,8 +331,30 @@ export function Dashboard() {
     }, 5000);
   };
 
-  const riskColor = getRiskColor(riskScore);
-  const isHighRisk = riskScore > 70;
+  const renderPage = () => {
+    switch (currentPage) {
+      case "dashboard":
+        return <DashboardPage />;
+      case "admin":
+        return <Admin />;
+      case "logs":
+        return <Logs />;
+      case "alerts":
+        return <Alerts />;
+      case "backups":
+        return <Backups />;
+      case "files":
+        return <Files />;
+      case "notifications":
+        return <NotificationsPage />;
+      case "activity":
+        return <ActivityTracking />;
+      case "access-control":
+        return <AccessControl />;
+      default:
+        return <DashboardPage />;
+    }
+  };
 
   return (
     <div
@@ -232,372 +502,169 @@ export function Dashboard() {
         )}
       </AnimatePresence>
 
-      {/* Header */}
-      <header
+      {/* Layout: Sidebar + Content */}
+      <div
         style={{
           display: "flex",
-          alignItems: "center",
-          padding: "0 1.5rem",
-          height: 60,
-          borderBottom: "1px solid rgba(0,212,255,0.1)",
-          background: "rgba(5,5,30,0.9)",
-          backdropFilter: "blur(16px)",
-          flexShrink: 0,
+          flex: 1,
+          overflow: "hidden",
           position: "relative",
-          zIndex: 10,
-          gap: 16,
+          zIndex: 1,
         }}
       >
-        {/* Logo */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <Zap size={20} style={{ color: "#00d4ff" }} />
-          <span
-            style={{
-              fontFamily: "JetBrains Mono, monospace",
-              fontSize: "1rem",
-              fontWeight: 900,
-              letterSpacing: "0.2em",
-              color: "#00d4ff",
-              textShadow: "0 0 12px rgba(0,212,255,0.5)",
-            }}
-          >
-            SENTINEL
-          </span>
-        </div>
+        <Sidebar
+          activePage={currentPage}
+          onNavigate={setCurrentPage}
+          unreadCount={unreadCount}
+          activeAlertsCount={activeAlertsCount}
+          onLogout={logout}
+        />
 
-        {/* Status pills */}
         <div
           style={{
-            display: "flex",
-            gap: 8,
             flex: 1,
-            justifyContent: "center",
-            flexWrap: "wrap",
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
           }}
         >
-          {[
-            {
-              icon: <Eye size={10} />,
-              label: "THREAT DETECTION",
-              active: true,
-            },
-            {
-              icon: <MonitorDot size={10} />,
-              label: "BEHAVIORAL MONITORING",
-              active: true,
-            },
-            { icon: <Cpu size={10} />, label: "RISK ENGINE", active: true },
-          ].map((s) => (
+          {/* Top header bar */}
+          <header
+            style={{
+              display: "flex",
+              alignItems: "center",
+              padding: "0 1.5rem",
+              height: 52,
+              borderBottom: "1px solid rgba(0,212,255,0.08)",
+              background: "rgba(5,5,30,0.9)",
+              backdropFilter: "blur(16px)",
+              flexShrink: 0,
+              gap: 16,
+            }}
+          >
+            {/* Page title */}
+            <span
+              style={{
+                fontFamily: "JetBrains Mono, monospace",
+                fontSize: "0.7rem",
+                letterSpacing: "0.25em",
+                color: "rgba(0,212,255,0.6)",
+                flex: 1,
+              }}
+            >
+              {currentPage.toUpperCase().replace("-", " ")}
+            </span>
+
+            {/* Status pills */}
+            <div style={{ display: "flex", gap: 6 }}>
+              {[
+                { icon: <Eye size={9} />, label: "THREAT DETECTION" },
+                {
+                  icon: <MonitorDot size={9} />,
+                  label: "BEHAVIORAL MONITORING",
+                },
+                { icon: <Cpu size={9} />, label: "RISK ENGINE" },
+              ].map((s) => (
+                <div
+                  key={s.label}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 4,
+                    background: "rgba(0,255,136,0.06)",
+                    border: "1px solid rgba(0,255,136,0.15)",
+                    borderRadius: 100,
+                    padding: "2px 8px",
+                    fontSize: "0.55rem",
+                    fontFamily: "JetBrains Mono, monospace",
+                    letterSpacing: "0.08em",
+                    color: "rgba(0,255,136,0.7)",
+                  }}
+                >
+                  {s.icon}
+                  {s.label}: ACTIVE
+                </div>
+              ))}
+            </div>
+
+            {/* Risk badge + notification bell */}
             <div
-              key={s.label}
               style={{
                 display: "flex",
                 alignItems: "center",
-                gap: 5,
-                background: "rgba(0,255,136,0.06)",
-                border: "1px solid rgba(0,255,136,0.2)",
+                gap: 6,
+                background: `${riskColor}15`,
+                border: `1px solid ${riskColor}40`,
                 borderRadius: 100,
                 padding: "3px 10px",
-                fontSize: "0.58rem",
+                fontSize: "0.6rem",
                 fontFamily: "JetBrains Mono, monospace",
+                color: riskColor,
+              }}
+            >
+              <Zap size={10} />
+              RISK: {Math.round(riskScore)}
+            </div>
+            <NotificationBell />
+          </header>
+
+          {/* Main page content */}
+          <div style={{ flex: 1, overflow: "auto" }}>
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={currentPage}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.2 }}
+                style={{ minHeight: "100%" }}
+              >
+                {renderPage()}
+              </motion.div>
+            </AnimatePresence>
+          </div>
+
+          {/* Footer */}
+          <footer
+            style={{
+              borderTop: "1px solid rgba(0,212,255,0.05)",
+              padding: "8px 24px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <p
+              style={{
+                fontFamily: "JetBrains Mono, monospace",
+                fontSize: "0.55rem",
+                color: "rgba(224,224,255,0.15)",
                 letterSpacing: "0.1em",
-                color: "rgba(0,255,136,0.8)",
+                margin: 0,
               }}
             >
-              {s.icon}
-              {s.label}: ACTIVE
-            </div>
-          ))}
+              © {new Date().getFullYear()} — Built with love using{" "}
+              <a
+                href={`https://caffeine.ai?utm_source=caffeine-footer&utm_medium=referral&utm_content=${encodeURIComponent(typeof window !== "undefined" ? window.location.hostname : "")}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: "rgba(0,212,255,0.3)", textDecoration: "none" }}
+              >
+                caffeine.ai
+              </a>
+            </p>
+          </footer>
         </div>
-
-        {/* Right side */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <NotificationBell />
-          <motion.button
-            data-ocid="dashboard.secondary_button"
-            onClick={logout}
-            whileHover={{ scale: 1.04 }}
-            whileTap={{ scale: 0.96 }}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              background: "transparent",
-              border: "1px solid rgba(0,212,255,0.2)",
-              borderRadius: 6,
-              padding: "5px 12px",
-              color: "rgba(0,212,255,0.6)",
-              fontSize: "0.65rem",
-              fontFamily: "JetBrains Mono, monospace",
-              letterSpacing: "0.1em",
-              cursor: "pointer",
-            }}
-          >
-            <LogOut size={14} />
-            LOGOUT
-          </motion.button>
-        </div>
-      </header>
-
-      {/* Main content */}
-      <main
-        style={{
-          flex: 1,
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: 20,
-          padding: "20px 24px",
-          overflow: "auto",
-          position: "relative",
-          zIndex: 1,
-          maxWidth: 1400,
-          margin: "0 auto",
-          width: "100%",
-          boxSizing: "border-box",
-        }}
-      >
-        {/* Left column */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          {/* Risk Gauge card */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4 }}
-            style={{
-              background: "rgba(5,5,30,0.7)",
-              border: `1px solid ${riskColor}30`,
-              borderRadius: 12,
-              padding: "1.5rem",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              boxShadow: `0 0 30px ${riskColor}08`,
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                marginBottom: 16,
-                alignSelf: "flex-start",
-              }}
-            >
-              <Radio size={14} style={{ color: riskColor }} />
-              <span
-                style={{
-                  fontFamily: "JetBrains Mono, monospace",
-                  fontSize: "0.65rem",
-                  letterSpacing: "0.2em",
-                  color: "rgba(224,224,255,0.5)",
-                }}
-              >
-                REAL-TIME RISK ASSESSMENT
-              </span>
-              <span
-                style={{
-                  marginLeft: "auto",
-                  fontFamily: "JetBrains Mono, monospace",
-                  fontSize: "0.55rem",
-                  color: "rgba(0,255,136,0.6)",
-                  background: "rgba(0,255,136,0.06)",
-                  border: "1px solid rgba(0,255,136,0.15)",
-                  borderRadius: 100,
-                  padding: "2px 8px",
-                }}
-              >
-                LIVE
-              </span>
-            </div>
-            <RiskGauge score={riskScore} />
-          </motion.div>
-
-          {/* Security metrics */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.1 }}
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(3, 1fr)",
-              gap: 10,
-            }}
-          >
-            {[
-              {
-                icon: <Users size={16} style={{ color: "#00d4ff" }} />,
-                label: "ACTIVE SESSIONS",
-                value: "1",
-                color: "#00d4ff",
-              },
-              {
-                icon: <ShieldCheck size={16} style={{ color: "#00ff88" }} />,
-                label: "THREATS BLOCKED",
-                value: String(threatsBlocked),
-                color: "#00ff88",
-              },
-              {
-                icon: <Shield size={16} style={{ color: "#ffaa00" }} />,
-                label: "LAST SCAN",
-                value: "LIVE",
-                color: "#ffaa00",
-              },
-            ].map((card) => (
-              <div
-                key={card.label}
-                style={{
-                  background: "rgba(5,5,30,0.7)",
-                  border: `1px solid ${card.color}20`,
-                  borderRadius: 8,
-                  padding: "12px",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 8,
-                }}
-              >
-                {card.icon}
-                <p
-                  style={{
-                    fontFamily: "JetBrains Mono, monospace",
-                    fontSize: "1.4rem",
-                    fontWeight: 900,
-                    color: card.color,
-                    margin: 0,
-                    textShadow: `0 0 10px ${card.color}50`,
-                  }}
-                >
-                  {card.value}
-                </p>
-                <p
-                  style={{
-                    fontFamily: "JetBrains Mono, monospace",
-                    fontSize: "0.55rem",
-                    color: "rgba(224,224,255,0.35)",
-                    margin: 0,
-                    letterSpacing: "0.1em",
-                  }}
-                >
-                  {card.label}
-                </p>
-              </div>
-            ))}
-          </motion.div>
-        </div>
-
-        {/* Right column */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          {/* Activity log */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.15 }}
-            style={{ flex: 1, minHeight: 0, maxHeight: 360 }}
-          >
-            <ActivityLog />
-          </motion.div>
-
-          {/* Risk level info */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.2 }}
-            style={{
-              background: "rgba(5,5,30,0.7)",
-              border: `1px solid ${riskColor}20`,
-              borderRadius: 8,
-              padding: "12px 16px",
-              display: "flex",
-              alignItems: "center",
-              gap: 12,
-            }}
-          >
-            <div
-              style={{
-                width: 8,
-                height: 8,
-                borderRadius: "50%",
-                background: riskColor,
-                boxShadow: `0 0 10px ${riskColor}`,
-                animation: "pulse 2s infinite",
-                flexShrink: 0,
-              }}
-            />
-            <div style={{ flex: 1 }}>
-              <p
-                style={{
-                  fontFamily: "JetBrains Mono, monospace",
-                  fontSize: "0.65rem",
-                  color: riskColor,
-                  margin: 0,
-                  letterSpacing: "0.15em",
-                }}
-              >
-                CURRENT THREAT LEVEL: {riskLevel.toUpperCase()}
-              </p>
-              <p
-                style={{
-                  fontFamily: "JetBrains Mono, monospace",
-                  fontSize: "0.58rem",
-                  color: "rgba(224,224,255,0.35)",
-                  margin: "3px 0 0",
-                }}
-              >
-                Risk engine auto-increments every 15s — user interaction reduces
-                score
-              </p>
-            </div>
-          </motion.div>
-
-          {/* Self-destruct */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.25 }}
-            style={{
-              background: "rgba(5,5,30,0.7)",
-              border: "1px solid rgba(255,0,64,0.15)",
-              borderRadius: 8,
-              padding: "16px",
-            }}
-          >
-            <SelfDestructButton />
-          </motion.div>
-        </div>
-      </main>
-
-      {/* Footer */}
-      <footer
-        style={{
-          borderTop: "1px solid rgba(0,212,255,0.06)",
-          padding: "10px 24px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flexShrink: 0,
-          position: "relative",
-          zIndex: 1,
-        }}
-      >
-        <p
-          style={{
-            fontFamily: "JetBrains Mono, monospace",
-            fontSize: "0.58rem",
-            color: "rgba(224,224,255,0.2)",
-            letterSpacing: "0.1em",
-            margin: 0,
-          }}
-        >
-          © {new Date().getFullYear()} — Built with love using{" "}
-          <a
-            href={`https://caffeine.ai?utm_source=caffeine-footer&utm_medium=referral&utm_content=${encodeURIComponent(typeof window !== "undefined" ? window.location.hostname : "")}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{ color: "rgba(0,212,255,0.4)", textDecoration: "none" }}
-          >
-            caffeine.ai
-          </a>
-        </p>
-      </footer>
+      </div>
     </div>
+  );
+}
+
+export function Dashboard() {
+  return (
+    <AppStateProvider>
+      <AppShellInner />
+    </AppStateProvider>
   );
 }

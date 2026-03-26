@@ -10,10 +10,10 @@ import Principal "mo:core/Principal";
 import Runtime "mo:core/Runtime";
 import MixinAuthorization "authorization/MixinAuthorization";
 import AccessControl "authorization/access-control";
-import Migration "migration";
+
 import MixinStorage "blob-storage/Mixin";
 
-(with migration = Migration.run)
+
 actor {
   let accessControlState = AccessControl.initState();
   include MixinAuthorization(accessControlState);

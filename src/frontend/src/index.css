@@ -133,14 +133,62 @@
   }
 }
 
-/* Pulse red for danger vignette */
-@keyframes pulse-red {
+/* Red pulse vignette for high risk */
+@keyframes redPulse {
   0%,
   100% {
-    opacity: 0.04;
+    box-shadow: inset 0 0 0px rgba(255, 0, 0, 0);
   }
   50% {
-    opacity: 0.12;
+    box-shadow: inset 0 0 80px rgba(255, 0, 0, 0.15);
+  }
+}
+
+/* Screen shake */
+@keyframes screenShake {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  10% {
+    transform: translate(-5px, 5px);
+  }
+  20% {
+    transform: translate(5px, -5px);
+  }
+  30% {
+    transform: translate(-5px, 0);
+  }
+  40% {
+    transform: translate(5px, 5px);
+  }
+  50% {
+    transform: translate(-3px, -3px);
+  }
+  60% {
+    transform: translate(3px, 3px);
+  }
+  70% {
+    transform: translate(-3px, -1px);
+  }
+  80% {
+    transform: translate(3px, 1px);
+  }
+  90% {
+    transform: translate(-1px, 0);
+  }
+}
+
+/* Animated gradient border */
+@keyframes gradientBorderAnim {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
   }
 }
 
@@ -155,7 +203,18 @@
   }
 }
 
-/* Screen shake */
+/* Pulse red for danger vignette */
+@keyframes pulse-red {
+  0%,
+  100% {
+    opacity: 0.04;
+  }
+  50% {
+    opacity: 0.12;
+  }
+}
+
+/* Shake */
 @keyframes shake {
   0%,
   100% {
@@ -191,7 +250,7 @@
 }
 
 .sentinel-shake {
-  animation: shake 0.8s ease-in-out;
+  animation: screenShake 0.8s ease-in-out;
 }
 
 /* Countdown flash */
@@ -216,4 +275,21 @@
     opacity: 0.5;
     box-shadow: 0 0 12px currentColor;
   }
+}
+
+/* Slide in from right */
+@keyframes slideInRight {
+  from {
+    transform: translateX(40px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* Row slide in */
+.row-slide-in {
+  animation: slideInRight 0.3s ease-out both;
 }

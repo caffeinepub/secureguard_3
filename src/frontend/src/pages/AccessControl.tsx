@@ -1,445 +1,421 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Principal } from "@icp-sdk/core/principal";
 import {
   AlertTriangle,
+  CheckCircle,
   Key,
   Lock,
+  Shield,
   ShieldCheck,
   Users,
-  Wifi,
+  XCircle,
 } from "lucide-react";
-import { AnimatePresence, motion } from "motion/react";
+import { motion } from "motion/react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { UserRole } from "../backend";
-import { Button3D } from "../components/Button3D";
-import { useActor } from "../hooks/useActor";
-import { useEvents, useSystemStatus } from "../hooks/useQueries";
+import { useAppState } from "../context/AppStateContext";
 
-function riskColor(level: string): string {
-  if (level === "critical") return "#ef4444";
-  if (level === "suspicious") return "#f59e0b";
-  return "#22c55e";
-}
+const PERMISSION_LIST = [
+  "Read",
+  "Write",
+  "Encrypt",
+  "Backup",
+  "Admin",
+] as const;
+type Permission = (typeof PERMISSION_LIST)[number];
+
+const PERM_COLORS: Record<Permission, string> = {
+  Read: "bg-cyan-500/15 text-cyan-400 border-cyan-500/25",
+  Write: "bg-blue-500/15 text-blue-400 border-blue-500/25",
+  Encrypt: "bg-purple-500/15 text-purple-400 border-purple-500/25",
+  Backup: "bg-amber-500/15 text-amber-400 border-amber-500/25",
+  Admin: "bg-red-500/15 text-red-400 border-red-500/25",
+};
 
 export function AccessControl() {
-  const { data: events = [] } = useEvents();
-  const { data: status } = useSystemStatus();
-  const { actor } = useActor();
+  const { users, setUsers } = useAppState();
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
-  const [principalInput, setPrincipalInput] = useState("");
-  const [selectedRole, setSelectedRole] = useState<"user" | "guest">("user");
-  const [isGranting, setIsGranting] = useState(false);
-  const [isRevoking, setIsRevoking] = useState(false);
-  const [grantAnimating, setGrantAnimating] = useState(false);
-  const [revokeAnimating, setRevokeAnimating] = useState(false);
+  const adminUser = users.find((u) => u.role === "ADMIN");
 
-  const unauthorizedAttempts = events.filter(
-    (e) => e.action === "unauthorized_access",
-  );
-
-  const activeSessions = (() => {
-    const seen = new Map<string, (typeof events)[0]>();
-    for (const ev of [...events].sort((a, b) =>
-      Number(b.timestamp - a.timestamp),
-    )) {
-      if (!seen.has(ev.userId)) seen.set(ev.userId, ev);
-      if (seen.size >= 5) break;
-    }
-    return Array.from(seen.values());
-  })();
-
-  const handleGrantAccess = async () => {
-    if (!actor || !principalInput.trim()) {
-      toast.error("Please enter a valid Principal ID");
+  const togglePermission = (userId: string, perm: Permission) => {
+    const user = users.find((u) => u.id === userId);
+    if (!user) return;
+    if (user.role === "ADMIN") {
+      toast.error("Cannot modify admin permissions");
       return;
     }
-    // Key spin animation
-    setGrantAnimating(true);
-    setTimeout(async () => {
-      setGrantAnimating(false);
-      setIsGranting(true);
-      try {
-        const principal = Principal.fromText(principalInput.trim());
-        const role = selectedRole === "user" ? UserRole.user : UserRole.guest;
-        await actor.assignCallerUserRole(principal, role);
-        toast.success(
-          `Access granted: ${principalInput.trim().slice(0, 16)}... assigned role '${selectedRole}'`,
-        );
-        setPrincipalInput("");
-      } catch (err) {
-        const msg =
-          err instanceof Error
-            ? err.message
-            : "Invalid Principal ID or permission denied";
-        toast.error(`Grant failed: ${msg}`);
-      } finally {
-        setIsGranting(false);
-      }
-    }, 700);
-  };
-
-  const handleRevoke = async () => {
-    if (!actor || !principalInput.trim()) {
-      toast.error("Please enter a valid Principal ID");
-      return;
-    }
-    // Lock close animation
-    setRevokeAnimating(true);
-    setTimeout(async () => {
-      setRevokeAnimating(false);
-      setIsRevoking(true);
-      try {
-        const principal = Principal.fromText(principalInput.trim());
-        await actor.assignCallerUserRole(principal, UserRole.guest);
-        toast.warning(
-          `Access revoked for ${principalInput.trim().slice(0, 16)}...`,
-        );
-        setPrincipalInput("");
-      } catch (_err) {
-        toast.error("Revoke failed: Invalid Principal ID or permission denied");
-      } finally {
-        setIsRevoking(false);
-      }
-    }, 600);
+    const hasPerm = user.permissions.includes(perm);
+    const updated = hasPerm
+      ? user.permissions.filter((p) => p !== perm)
+      : [...user.permissions, perm];
+    setUsers(
+      users.map((u) => (u.id === userId ? { ...u, permissions: updated } : u)),
+    );
+    toast.success(
+      `${perm} permission ${hasPerm ? "revoked from" : "granted to"} ${user.name}`,
+    );
   };
 
   return (
-    <div className="flex-1 overflow-auto p-6 space-y-6">
-      <div>
-        <p className="text-[11px] text-muted-foreground tracking-widest uppercase">
-          SecureGuard – Access Control
-        </p>
-        <h1 className="text-2xl font-bold text-foreground mt-0.5">
-          Access Control
-        </h1>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Grant / Revoke Access */}
-        <Card className="bg-card border-border">
-          <CardHeader className="pb-2 pt-4 px-4">
-            <CardTitle className="text-[13px] font-semibold text-foreground flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4 text-primary" />
-              Manage Access
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-4 space-y-4">
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">
-                Principal ID
-              </Label>
-              <Input
-                className="bg-secondary border-border text-foreground text-xs font-mono"
-                placeholder="aaaaa-bbbbb-ccccc-ddddd-eee"
-                value={principalInput}
-                onChange={(e) => setPrincipalInput(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Role</Label>
-              <Select
-                value={selectedRole}
-                onValueChange={(v) => setSelectedRole(v as "user" | "guest")}
-              >
-                <SelectTrigger className="bg-secondary border-border h-9 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="user">
-                    User — Read / Write / Encrypt
-                  </SelectItem>
-                  <SelectItem value="guest">Guest — Read Only</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="flex gap-3">
-              {/* Grant Access with key spin */}
-              <Button3D style={{ flex: 1 }}>
-                <Button
-                  data-ocid="access_control.grant_button"
-                  className="w-full h-9 text-xs bg-success/20 text-success border border-success/30 hover:bg-success/30"
-                  variant="ghost"
-                  onClick={handleGrantAccess}
-                  disabled={
-                    isGranting || grantAnimating || !principalInput.trim()
-                  }
-                >
-                  <AnimatePresence mode="wait">
-                    {grantAnimating ? (
-                      <motion.span
-                        key="key-spin"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="flex items-center gap-1.5"
-                      >
-                        <motion.div
-                          animate={{ rotate: 360 }}
-                          transition={{
-                            duration: 0.6,
-                            repeat: Number.POSITIVE_INFINITY,
-                            ease: "linear",
-                          }}
-                        >
-                          <Key className="w-3.5 h-3.5" />
-                        </motion.div>
-                        Granting...
-                      </motion.span>
-                    ) : (
-                      <motion.span
-                        key="grant-label"
-                        className="flex items-center gap-1.5"
-                      >
-                        <Key className="w-3.5 h-3.5" />
-                        {isGranting ? "Granting..." : "Grant Access"}
-                      </motion.span>
-                    )}
-                  </AnimatePresence>
-                </Button>
-              </Button3D>
-
-              {/* Revoke Access with lock close */}
-              <Button3D style={{ flex: 1 }}>
-                <Button
-                  data-ocid="access_control.revoke_button"
-                  className="w-full h-9 text-xs bg-destructive/15 text-destructive border border-destructive/25 hover:bg-destructive/25"
-                  variant="ghost"
-                  onClick={handleRevoke}
-                  disabled={
-                    isRevoking || revokeAnimating || !principalInput.trim()
-                  }
-                >
-                  <AnimatePresence mode="wait">
-                    {revokeAnimating ? (
-                      <motion.span
-                        key="lock-close"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="flex items-center gap-1.5"
-                      >
-                        <motion.div
-                          animate={{
-                            scale: [1, 1.3, 0.9, 1],
-                            rotate: [0, -10, 10, 0],
-                          }}
-                          transition={{ duration: 0.5 }}
-                        >
-                          <Lock className="w-3.5 h-3.5" />
-                        </motion.div>
-                        Revoking...
-                      </motion.span>
-                    ) : (
-                      <motion.span
-                        key="revoke-label"
-                        className="flex items-center gap-1.5"
-                      >
-                        <Lock className="w-3.5 h-3.5" />
-                        {isRevoking ? "Revoking..." : "Revoke Access"}
-                      </motion.span>
-                    )}
-                  </AnimatePresence>
-                </Button>
-              </Button3D>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Active Sessions */}
-        <Card className="bg-card border-border">
-          <CardHeader className="pb-2 pt-4 px-4">
-            <CardTitle className="text-[13px] font-semibold text-foreground flex items-center gap-2">
-              <Wifi className="w-4 h-4 text-success" />
-              Active Sessions
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            {activeSessions.length === 0 ? (
-              <p className="text-xs text-muted-foreground text-center py-8">
-                No active sessions
-              </p>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow className="border-border hover:bg-transparent">
-                    <TableHead className="text-[11px] text-muted-foreground py-2 px-4">
-                      User
-                    </TableHead>
-                    <TableHead className="text-[11px] text-muted-foreground py-2">
-                      IP
-                    </TableHead>
-                    <TableHead className="text-[11px] text-muted-foreground py-2">
-                      Risk
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {activeSessions.map((ev, i) => (
-                    <motion.tr
-                      key={String(ev.id)}
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: i * 0.05 }}
-                      style={{ borderBottom: "1px solid var(--border)" }}
-                    >
-                      <TableCell className="py-2 px-4">
-                        <div>
-                          <p className="text-xs font-medium text-foreground">
-                            {ev.userName}
-                          </p>
-                          <p className="text-[10px] text-muted-foreground font-mono">
-                            {ev.userId.slice(0, 16)}...
-                          </p>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-[11px] text-muted-foreground py-2 font-mono">
-                        {ev.ipAddress}
-                      </TableCell>
-                      <TableCell className="py-2">
-                        <span
-                          className="text-[11px] font-bold"
-                          style={{ color: riskColor(ev.riskLevel ?? "") }}
-                        >
-                          {ev.riskLevel?.toUpperCase()}
-                        </span>
-                      </TableCell>
-                    </motion.tr>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Unauthorized Attempts */}
-      {unauthorizedAttempts.length > 0 && (
-        <Card className="bg-card border-destructive/30">
-          <CardHeader className="pb-2 pt-4 px-4">
-            <CardTitle className="text-[13px] font-semibold text-destructive flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4" />
-              Unauthorized Access Attempts ({unauthorizedAttempts.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow className="border-border hover:bg-transparent">
-                  <TableHead className="text-[11px] text-muted-foreground py-2 px-4">
-                    User
-                  </TableHead>
-                  <TableHead className="text-[11px] text-muted-foreground py-2">
-                    IP Address
-                  </TableHead>
-                  <TableHead className="text-[11px] text-muted-foreground py-2">
-                    Time
-                  </TableHead>
-                  <TableHead className="text-[11px] text-muted-foreground py-2">
-                    Risk Score
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {unauthorizedAttempts.map((ev, i) => (
-                  <motion.tr
-                    key={String(ev.id)}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: i * 0.04 }}
-                    style={{ borderBottom: "1px solid var(--border)" }}
-                  >
-                    <TableCell className="text-xs text-foreground py-2 px-4 font-medium">
-                      {ev.userName}
-                    </TableCell>
-                    <TableCell className="text-[11px] text-muted-foreground py-2 font-mono">
-                      {ev.ipAddress}
-                    </TableCell>
-                    <TableCell className="text-[11px] text-muted-foreground py-2">
-                      {new Date(
-                        Number(ev.timestamp) / 1_000_000,
-                      ).toLocaleString()}
-                    </TableCell>
-                    <TableCell className="py-2">
-                      <Badge className="text-[10px] px-1.5 bg-destructive/15 text-destructive border-destructive/30">
-                        {String(ev.riskScore)}
-                      </Badge>
-                    </TableCell>
-                  </motion.tr>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* System Status */}
-      {status && (
-        <Card
-          className={`bg-card border ${
-            status.locked ? "border-destructive/50" : "border-success/30"
-          }`}
+    <div style={{ padding: "24px", maxWidth: 1100, margin: "0 auto" }}>
+      {/* Header */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          marginBottom: 24,
+        }}
+      >
+        <Shield size={20} style={{ color: "#00d4ff" }} />
+        <h1
+          style={{
+            fontFamily: "JetBrains Mono, monospace",
+            fontSize: "1.1rem",
+            fontWeight: 900,
+            letterSpacing: "0.25em",
+            color: "#00d4ff",
+            margin: 0,
+            textShadow: "0 0 15px rgba(0,212,255,0.5)",
+          }}
         >
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <motion.div
-                animate={status.locked ? { scale: [1, 1.1, 1] } : {}}
-                transition={{ duration: 2, repeat: Number.POSITIVE_INFINITY }}
+          ACCESS CONTROL
+        </h1>
+        <Badge
+          variant="outline"
+          className="text-xs font-mono border-cyan-500/20 text-cyan-400"
+        >
+          {users.length} SUBJECTS
+        </Badge>
+      </div>
+
+      {/* Admin info card */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+      >
+        <Card
+          className="mb-6"
+          style={{
+            background: "rgba(0,212,255,0.04)",
+            borderColor: "rgba(0,212,255,0.2)",
+          }}
+        >
+          <CardContent className="p-4 flex items-center gap-4">
+            <ShieldCheck size={32} style={{ color: "#00d4ff" }} />
+            <div>
+              <p
+                style={{
+                  fontFamily: "JetBrains Mono, monospace",
+                  fontSize: "0.75rem",
+                  fontWeight: 700,
+                  color: "#00d4ff",
+                  margin: 0,
+                  letterSpacing: "0.1em",
+                }}
               >
-                {status.locked ? (
-                  <Lock className="w-5 h-5 text-destructive" />
-                ) : (
-                  <ShieldCheck className="w-5 h-5 text-success" />
-                )}
-              </motion.div>
-              <div>
-                <p className="text-sm font-semibold text-foreground">
-                  System {status.locked ? "LOCKED" : "OPERATIONAL"}
-                </p>
-                {status.locked && (
-                  <p className="text-xs text-muted-foreground">
-                    {status.lockReason}
-                  </p>
-                )}
-              </div>
-              <div className="ml-auto flex items-center gap-4 text-xs text-muted-foreground">
-                <span>
-                  <span className="text-foreground font-bold">
-                    {String(status.totalEventsCount)}
-                  </span>{" "}
-                  events
-                </span>
-                <span>
-                  <span className="text-destructive font-bold">
-                    {String(status.activeAlertsCount)}
-                  </span>{" "}
-                  active alerts
-                </span>
-              </div>
+                ADMINISTRATOR: {adminUser?.name ?? "ku"}
+              </p>
+              <p
+                style={{
+                  fontFamily: "JetBrains Mono, monospace",
+                  fontSize: "0.6rem",
+                  color: "rgba(0,212,255,0.5)",
+                  margin: "3px 0 0",
+                }}
+              >
+                Only admin can grant or revoke access permissions for all users.
+              </p>
+            </div>
+            <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+              {PERMISSION_LIST.map((p) => (
+                <Badge
+                  key={p}
+                  variant="outline"
+                  className={`text-xs font-mono ${PERM_COLORS[p]}`}
+                >
+                  {p}
+                </Badge>
+              ))}
             </div>
           </CardContent>
         </Card>
-      )}
+      </motion.div>
+
+      {/* User permissions grid */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
+          gap: 16,
+        }}
+      >
+        {users.map((user, i) => {
+          const isAdmin = user.role === "ADMIN";
+          const isBlocked = user.blocked;
+          const isSelected = selectedUserId === user.id;
+          return (
+            <motion.div
+              key={user.id}
+              data-ocid={`access.item.${i + 1}`}
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.06 }}
+              whileHover={{ y: -2, transition: { duration: 0.15 } }}
+            >
+              <Card
+                className="cursor-pointer transition-all duration-200"
+                style={{
+                  background: isAdmin
+                    ? "rgba(0,212,255,0.06)"
+                    : isBlocked
+                      ? "rgba(255,0,64,0.04)"
+                      : "rgba(5,5,30,0.7)",
+                  borderColor: isAdmin
+                    ? "rgba(0,212,255,0.25)"
+                    : isBlocked
+                      ? "rgba(255,0,64,0.25)"
+                      : "rgba(255,255,255,0.05)",
+                }}
+                onClick={() => setSelectedUserId(isSelected ? null : user.id)}
+              >
+                <CardHeader className="p-4 pb-2">
+                  <div
+                    style={{ display: "flex", alignItems: "center", gap: 10 }}
+                  >
+                    <div
+                      style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: "50%",
+                        background: isAdmin
+                          ? "rgba(0,212,255,0.15)"
+                          : "rgba(124,58,237,0.15)",
+                        border: `1px solid ${isAdmin ? "rgba(0,212,255,0.3)" : "rgba(124,58,237,0.3)"}`,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontFamily: "JetBrains Mono, monospace",
+                        fontSize: "0.75rem",
+                        fontWeight: 700,
+                        color: isAdmin ? "#00d4ff" : "#c084fc",
+                      }}
+                    >
+                      {user.name.slice(0, 2).toUpperCase()}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <p
+                        style={{
+                          fontFamily: "JetBrains Mono, monospace",
+                          fontSize: "0.75rem",
+                          fontWeight: 700,
+                          color: "rgba(224,224,255,0.9)",
+                          margin: 0,
+                        }}
+                      >
+                        {user.name}
+                      </p>
+                      <p
+                        style={{
+                          fontFamily: "JetBrains Mono, monospace",
+                          fontSize: "0.58rem",
+                          color: "rgba(224,224,255,0.35)",
+                          margin: 0,
+                        }}
+                      >
+                        {user.email}
+                      </p>
+                    </div>
+                    {isBlocked ? (
+                      <XCircle size={16} style={{ color: "#ff0040" }} />
+                    ) : isAdmin ? (
+                      <ShieldCheck size={16} style={{ color: "#00d4ff" }} />
+                    ) : (
+                      <CheckCircle
+                        size={16}
+                        style={{ color: "rgba(0,255,136,0.6)" }}
+                      />
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent className="p-4 pt-2">
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: 4,
+                      marginBottom: 12,
+                    }}
+                  >
+                    {user.permissions.length > 0 ? (
+                      user.permissions.map((p) => (
+                        <Badge
+                          key={p}
+                          variant="outline"
+                          className={`text-xs font-mono ${PERM_COLORS[p as Permission] ?? "bg-white/5 text-white/50"}`}
+                        >
+                          {p}
+                        </Badge>
+                      ))
+                    ) : (
+                      <span
+                        style={{
+                          fontFamily: "JetBrains Mono, monospace",
+                          fontSize: "0.6rem",
+                          color: "rgba(224,224,255,0.2)",
+                        }}
+                      >
+                        NO PERMISSIONS
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Permission toggles (expanded) */}
+                  {isSelected && !isAdmin && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      style={{
+                        borderTop: "1px solid rgba(0,212,255,0.08)",
+                        paddingTop: 10,
+                      }}
+                    >
+                      <p
+                        style={{
+                          fontFamily: "JetBrains Mono, monospace",
+                          fontSize: "0.58rem",
+                          color: "rgba(0,212,255,0.5)",
+                          letterSpacing: "0.15em",
+                          marginBottom: 8,
+                        }}
+                      >
+                        TOGGLE PERMISSIONS:
+                      </p>
+                      <div
+                        style={{ display: "flex", flexWrap: "wrap", gap: 6 }}
+                      >
+                        {PERMISSION_LIST.filter((p) => p !== "Admin").map(
+                          (perm) => {
+                            const has = user.permissions.includes(perm);
+                            return (
+                              <Button
+                                key={perm}
+                                data-ocid="access.toggle"
+                                size="sm"
+                                variant="outline"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  togglePermission(user.id, perm);
+                                }}
+                                className={`text-xs font-mono h-7 ${
+                                  has
+                                    ? PERM_COLORS[perm]
+                                    : "border-white/10 text-white/30 hover:bg-white/5"
+                                }`}
+                              >
+                                {has ? (
+                                  <Key size={10} className="mr-1" />
+                                ) : (
+                                  <Lock size={10} className="mr-1" />
+                                )}
+                                {perm}
+                              </Button>
+                            );
+                          },
+                        )}
+                      </div>
+                      {isBlocked && (
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 6,
+                            marginTop: 8,
+                            padding: "6px 10px",
+                            background: "rgba(255,0,64,0.08)",
+                            border: "1px solid rgba(255,0,64,0.2)",
+                            borderRadius: 6,
+                          }}
+                        >
+                          <AlertTriangle
+                            size={12}
+                            style={{ color: "#ff0040" }}
+                          />
+                          <span
+                            style={{
+                              fontFamily: "JetBrains Mono, monospace",
+                              fontSize: "0.6rem",
+                              color: "rgba(255,0,64,0.7)",
+                            }}
+                          >
+                            USER IS BLOCKED — Unblock from Admin Panel
+                          </span>
+                        </div>
+                      )}
+                    </motion.div>
+                  )}
+                </CardContent>
+              </Card>
+            </motion.div>
+          );
+        })}
+      </div>
+
+      {/* Legend */}
+      <div
+        style={{
+          marginTop: 32,
+          padding: "16px 20px",
+          background: "rgba(5,5,30,0.7)",
+          border: "1px solid rgba(0,212,255,0.08)",
+          borderRadius: 10,
+          display: "flex",
+          gap: 24,
+          flexWrap: "wrap",
+          alignItems: "center",
+        }}
+      >
+        <p
+          style={{
+            fontFamily: "JetBrains Mono, monospace",
+            fontSize: "0.6rem",
+            letterSpacing: "0.2em",
+            color: "rgba(0,212,255,0.5)",
+            margin: 0,
+          }}
+        >
+          PERMISSION LEGEND:
+        </p>
+        {PERMISSION_LIST.map((p) => (
+          <div
+            key={p}
+            style={{ display: "flex", alignItems: "center", gap: 6 }}
+          >
+            <Badge
+              variant="outline"
+              className={`text-xs font-mono ${PERM_COLORS[p]}`}
+            >
+              {p}
+            </Badge>
+            <span
+              style={{
+                fontFamily: "JetBrains Mono, monospace",
+                fontSize: "0.58rem",
+                color: "rgba(224,224,255,0.3)",
+              }}
+            >
+              {p === "Read" && "View files/logs"}
+              {p === "Write" && "Upload/edit files"}
+              {p === "Encrypt" && "Encrypt/shard files"}
+              {p === "Backup" && "Create/restore backups"}
+              {p === "Admin" && "Full system control"}
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

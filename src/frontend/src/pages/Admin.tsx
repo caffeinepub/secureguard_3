@@ -48,14 +48,6 @@ import { toast } from "sonner";
 import { AdminShield3D } from "../components/AdminShield3D";
 import { Button3D } from "../components/Button3D";
 import { useAppState } from "../context/AppStateContext";
-import {
-  useAddEvent,
-  useClearLogs,
-  useLockSystem,
-  useSeedDemoData,
-  useSystemStatus,
-  useUnlockSystem,
-} from "../hooks/useQueries";
 import type { SeedUser } from "../utils/seedData";
 
 function roleBadgeClass(role: string) {
@@ -87,13 +79,8 @@ function statusBadgeClass(status: string) {
 }
 
 export function Admin() {
-  const { data: status } = useSystemStatus();
-  const lockSystem = useLockSystem();
-  const unlockSystem = useUnlockSystem();
-  const clearLogs = useClearLogs();
-  const seedDemo = useSeedDemoData();
-  const addEvent = useAddEvent();
   const { users, setUsers, addLog, addNotification, reseedAll } = useAppState();
+  const [isLocked, setIsLocked] = useState(false);
 
   const [lockReason, setLockReason] = useState("");
   const [lockDialogOpen, setLockDialogOpen] = useState(false);
@@ -112,60 +99,34 @@ export function Admin() {
   const [newRole, setNewRole] = useState("ANALYST");
   const [newDept, setNewDept] = useState("");
 
-  const isLocked = status?.locked ?? false;
-
-  const handleLock = async () => {
-    await lockSystem.mutateAsync(lockReason || "Manual lock by admin");
+  const handleLock = () => {
+    setIsLocked(true);
     toast.warning("System locked");
     setLockDialogOpen(false);
     setLockReason("");
   };
 
-  const handleUnlock = async () => {
-    await unlockSystem.mutateAsync();
+  const handleUnlock = () => {
+    setIsLocked(false);
     toast.success("System unlocked");
   };
 
-  const handleClearLogs = async () => {
-    await clearLogs.mutateAsync();
+  const handleClearLogs = () => {
     toast.info("Logs cleared");
     setClearDialogOpen(false);
   };
 
-  const handleSimulateEvent = async () => {
+  const handleSimulateEvent = () => {
     const events = [
       {
         user: "Threat-Actor-X",
         action: "unauthorized_access",
         ip: "185.220.101.45",
-        score: 95,
-        level: "critical",
       },
-      {
-        user: "Scanner-Bot",
-        action: "port_scan",
-        ip: "45.33.32.156",
-        score: 72,
-        level: "critical",
-      },
-      {
-        user: "Internal-User-3",
-        action: "bulk_file_access",
-        ip: "10.0.1.88",
-        score: 55,
-        level: "suspicious",
-      },
+      { user: "Scanner-Bot", action: "port_scan", ip: "45.33.32.156" },
+      { user: "Internal-User-3", action: "bulk_file_access", ip: "10.0.1.88" },
     ];
     const ev = events[Math.floor(Math.random() * events.length)];
-    await addEvent.mutateAsync({
-      userId: `uid-${Math.random().toString(36).slice(2, 8)}`,
-      userName: ev.user,
-      action: ev.action,
-      resourceCount: BigInt(Math.floor(Math.random() * 50) + 1),
-      ipAddress: ev.ip,
-      riskScore: BigInt(ev.score),
-      riskLevel: ev.level,
-    });
     toast.warning(`Simulated: ${ev.action} from ${ev.ip}`);
   };
 
@@ -313,7 +274,7 @@ export function Admin() {
 
   const handleReseed = () => {
     reseedAll();
-    seedDemo.mutate();
+    reseedAll();
     toast.success("Demo data reseeded");
   };
 
@@ -453,10 +414,9 @@ export function Admin() {
               variant="outline"
               className="h-8 text-xs border-primary/30 text-primary hover:bg-primary/10"
               onClick={handleReseed}
-              disabled={seedDemo.isPending}
             >
               <Database className="w-3.5 h-3.5 mr-1.5" />
-              {seedDemo.isPending ? "Seeding..." : "Reseed Demo Data"}
+              "Reseed Demo Data"
             </Button>
           </Button3D>
           <Button3D>
@@ -466,10 +426,9 @@ export function Admin() {
               variant="outline"
               className="h-8 text-xs border-warning/30 text-warning hover:bg-warning/10"
               onClick={handleSimulateEvent}
-              disabled={addEvent.isPending}
             >
               <Siren className="w-3.5 h-3.5 mr-1.5" />
-              {addEvent.isPending ? "Simulating..." : "Simulate Breach"}
+              "Simulate Breach"
             </Button>
           </Button3D>
           <Button3D>
@@ -491,10 +450,9 @@ export function Admin() {
                 className="h-8 text-xs bg-success/20 text-success border border-success/30 hover:bg-success/30"
                 variant="ghost"
                 onClick={handleUnlock}
-                disabled={unlockSystem.isPending}
               >
                 <Unlock className="w-3.5 h-3.5 mr-1.5" />
-                {unlockSystem.isPending ? "Unlocking..." : "Unlock System"}
+                "Unlock System"
               </Button>
             </Button3D>
           ) : (
@@ -936,10 +894,9 @@ export function Admin() {
                 data-ocid="admin.lock.confirm_button"
                 size="sm"
                 onClick={handleLock}
-                disabled={lockSystem.isPending}
                 className="bg-destructive text-destructive-foreground"
               >
-                {lockSystem.isPending ? "Locking..." : "Lock System"}
+                "Lock System"
               </Button>
             </Button3D>
           </DialogFooter>
@@ -974,10 +931,9 @@ export function Admin() {
                 data-ocid="admin.clear_logs.confirm_button"
                 size="sm"
                 onClick={handleClearLogs}
-                disabled={clearLogs.isPending}
                 className="bg-destructive text-destructive-foreground"
               >
-                {clearLogs.isPending ? "Clearing..." : "Clear Logs"}
+                "Clear Logs"
               </Button>
             </Button3D>
           </DialogFooter>
